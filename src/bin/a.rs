@@ -21,17 +21,36 @@ fn main() {
     let mut output: Output = vec![];
     let mut rng = rand_chacha::ChaCha20Rng::seed_from_u64(0);
     let mut state = State::new();
-    for _ in 0..N * N {
+    const TURN: [usize; N * N] = [
+        3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3,
+        3, 3, 3, 3, 3, 3, 3, 5, 3, 3, 3, 3, 3, 3, 3, 3, 3, 1, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3,
+        4, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 2, 2, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3,
+        3, 3, 3, 3, 3, 3, 3, 3, 3, 3,
+    ]; // 先読みするターン
+    const POS: [usize; N * N] = [
+        7, 7, 7, 7, 7, 7, 14, 7, 12, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7,
+        7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 10, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7,
+        7, 7, 7, 7, 7, 7, 10, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 4, 7, 2, 3, 7, 7, 3, 4, 7, 7,
+        7, 7, 7, 7, 7, 7, 7, 7, 7, 7,
+    ]; // 新しく生成するposの数
+    const BEAM: [usize; N * N] = [
+        50, 50, 50, 50, 50, 50, 50, 150, 100, 50, 100, 50, 50, 50, 50, 50, 50, 50, 50, 50, 50, 50,
+        50, 50, 50, 50, 50, 50, 50, 50, 50, 50, 50, 50, 50, 50, 50, 50, 50, 50, 50, 50, 50, 50, 50,
+        50, 50, 50, 50, 50, 50, 50, 50, 50, 50, 50, 50, 50, 50, 50, 50, 50, 50, 50, 50, 50, 50, 50,
+        50, 50, 50, 50, 50, 50, 50, 50, 50, 20, 20, 20, 50, 50, 50, 50, 50, 50, 50, 50, 50, 50, 50,
+        50, 50, 50, 50, 50, 50, 50, 50, 50,
+    ]; // 上位k個のスコアのやつだけ覚える
+    for i in 0..N * N {
         input! {
             from &mut source,
             pos: usize,
         }
         state.place_candy(&input, pos);
 
-        const TURN: usize = 3; // 先読みするターン
-        const POS: usize = 7; // 新しく生成するposの数
-        const BEAM: usize = 50; // 上位k個のスコアのやつだけ覚える
-        let mut beam_scores = vec![0; BEAM];
+        // const TURN: usize = 3; // 先読みするターン
+        // const POS: usize = 7; // 新しく生成するposの数
+        // const BEAM: usize = 50; // 上位k個のスコアのやつだけ覚える
+        let mut beam_scores = vec![0; BEAM[i]];
         let mut max_dirs = vec![];
         let mut max_score = 0;
         let mut states = VecDeque::new();
@@ -44,20 +63,20 @@ fn main() {
                 new_state.apply_move(dir);
                 dirs.push(dir);
                 let new_score = compute_score(&input, &new_state);
-                let mut insert_i = BEAM;
+                let mut insert_i = BEAM[i];
                 for (i, &score) in beam_scores.iter().enumerate() {
                     if score < new_score {
                         insert_i = i;
                         break;
                     }
                 }
-                if insert_i == BEAM {
+                if insert_i == BEAM[i] {
                     continue;
                 }
                 beam_scores.insert(insert_i, new_score);
                 beam_scores.pop();
-                if 1 < 101 - new_state.t && turn < TURN {
-                    for _ in 0..POS {
+                if 1 < 101 - new_state.t && turn < TURN[i] {
+                    for _ in 0..POS[i] {
                         let mut new_state = new_state.clone();
                         let pos = rng.gen_range(1, 101 - new_state.t);
                         new_state.place_candy(&input, pos);
