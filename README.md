@@ -76,4 +76,6 @@ testerを用意して、100ケースローカル実行
 
 最後に提出したなにか 提出103M 終了……
 
+## after-contest
+
 **貪欲** https://twitter.com/_phocom/status/1586661601700380673 phocomさんのやつ、強すぎる…
