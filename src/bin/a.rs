@@ -19,7 +19,7 @@ fn main() {
     let mut source = LineSource::new(BufReader::new(io::stdin()));
     let input = parse_input(&mut source);
     let mut output: Output = vec![];
-    let mut rng = rand_chacha::ChaCha20Rng::seed_from_u64(157481628);
+    let mut rng = rand_chacha::ChaCha20Rng::seed_from_u64(0);
     let mut state = State::new();
     for _ in 0..N * N {
         input! {
