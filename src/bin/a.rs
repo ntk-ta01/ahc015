@@ -29,7 +29,9 @@ fn main() {
         state.place_candy(&input, pos);
 
         const TURN: usize = 3; // 先読みするターン
-        const POS: usize = 3; // 新しく生成するposの数
+        const POS: usize = 7; // 新しく生成するposの数
+        const BEAM: usize = 50; // 上位k個のスコアのやつだけ覚える
+        let mut beam_scores = vec![0; BEAM];
         let mut max_dirs = vec![];
         let mut max_score = 0;
         let mut states = VecDeque::new();
@@ -41,6 +43,19 @@ fn main() {
                 let (mut new_state, turn, mut dirs) = state.clone();
                 new_state.apply_move(dir);
                 dirs.push(dir);
+                let new_score = compute_score(&input, &new_state);
+                let mut insert_i = BEAM;
+                for (i, &score) in beam_scores.iter().enumerate() {
+                    if score < new_score {
+                        insert_i = i;
+                        break;
+                    }
+                }
+                if insert_i == BEAM {
+                    continue;
+                }
+                beam_scores.insert(insert_i, new_score);
+                beam_scores.pop();
                 if 1 < 101 - new_state.t && turn < TURN {
                     for _ in 0..POS {
                         let mut new_state = new_state.clone();
@@ -48,12 +63,9 @@ fn main() {
                         new_state.place_candy(&input, pos);
                         states.push_back((new_state, turn + 1, dirs.clone()));
                     }
-                } else {
-                    let new_score = compute_score(&input, &new_state);
-                    if max_score < new_score {
-                        max_score = new_score;
-                        max_dirs = dirs;
-                    }
+                } else if max_score < new_score {
+                    max_score = new_score;
+                    max_dirs = dirs;
                 }
             }
         }
