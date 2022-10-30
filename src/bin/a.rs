@@ -1,7 +1,8 @@
 use proconio::{input, source::line::LineSource};
+use rand::prelude::*;
 use std::io::{self, BufReader, Stdin};
 
-// const TIMELIMIT: f64 = 1.95;
+const TIMELIMIT: f64 = 1.95;
 
 const DIJ: [(usize, usize); 4] = [(1, 0), (0, 1), (!0, 0), (0, !0)];
 const DIR: [char; 4] = ['B', 'R', 'F', 'L']; // 下、右、上、左
@@ -9,39 +10,99 @@ const DIR: [char; 4] = ['B', 'R', 'F', 'L']; // 下、右、上、左
 const N: usize = 10;
 const M: usize = 3;
 
-type Output = Vec<char>;
-
 fn main() {
     let mut source = LineSource::new(BufReader::new(io::stdin()));
     let input = parse_input(&mut source);
-    let mut output: Output = vec![];
-    // let mut rng = rand_chacha::ChaCha20Rng::seed_from_u64(159640460);
+    let mut rng = rand_chacha::ChaCha20Rng::seed_from_u64(0);
     let mut state = State::new();
-    for _ in 0..N * N - 1 {
+    for turn in 0..N * N - 1 {
         input! {
             from &mut source,
             pos: usize,
         }
         state.place_candy(&input, pos);
-        // 次に来るやつを見て決める（一番最初に来た奴は見ない）
-        let dir = if input.fs[state.t] == 1 {
-            println!("B");
-            'B'
-        } else if state.t > 1 && output[state.t - 2] == 'B' {
-            println!("F");
-            'F'
-        } else if input.fs[state.t] == 2 {
-            println!("R");
-            'R'
-        } else {
-            println!("L");
-            'L'
-        };
+        let dir = monte_carlo(
+            &input,
+            &state,
+            turn,
+            TIMELIMIT / (N * N - 1) as f64,
+            &mut rng,
+        );
+        println!("{}", dir);
         state.apply_move(dir);
-        output.push(dir);
     }
-    // eprintln!("{}", output.len());
-    // eprintln!("{}", compute_score(&input, &state));
+    // input! {
+    //     from &mut source,
+    //     pos: usize,
+    // }
+    // state.place_candy(&input, pos);
+    eprintln!("{}", compute_score(&input, &state));
+}
+
+// モンテカルロ法　時間いっぱいランダムプレイアウトして次の手を決める
+fn monte_carlo<T: Rng>(
+    input: &Input,
+    state: &State,
+    turn: usize,
+    duration: f64,
+    rng: &mut T,
+) -> char {
+    // てりーさんのやつを読む https://atcoder.jp/contests/ahc015/submissions/36099779
+    // 参考資料 https://qiita.com/thun-c/items/058743a25c37c87b8aa4#%E5%8E%9F%E5%A7%8B%E3%83%A2%E3%83%B3%E3%83%86%E3%82%AB%E3%83%AB%E3%83%AD%E6%B3%95
+    let timer = Timer::new();
+
+    let mut scores = [0; 4];
+    let mut counts = [0; 4];
+
+    for init_dir in (0..4).cycle() {
+        // ルールベースに従って、時間いっぱいランダムプレイアウト
+        if duration < timer.get_time() {
+            break;
+        }
+
+        let mut state = state.clone();
+        state.apply_move(DIR[init_dir]);
+        for turn in (turn + 1)..N * N {
+            let pos = rng.gen_range(1, N * N + 1 - turn);
+            state.place_candy(input, pos);
+
+            if turn + 1 == N * N {
+                break;
+            }
+
+            let dir = rule_based(input, &state, state.t);
+            state.apply_move(dir);
+        }
+        let score = compute_score(input, &state);
+        scores[init_dir] += score;
+        counts[init_dir] += 1;
+    }
+
+    let mut best_score = 0.0;
+    let mut best_dir = !0;
+
+    for dir in 0..4 {
+        let score = scores[dir] as f64 / counts[dir] as f64;
+        if best_score < score {
+            best_score = score;
+            best_dir = dir;
+        }
+    }
+
+    DIR[best_dir]
+}
+
+fn rule_based(input: &Input, state: &State, turn: usize) -> char {
+    // 次に来るやつを見て決める（一番最初に来た奴は見ない）
+    if input.fs[turn] == 1 {
+        'B'
+    } else if state.t > 1 && state.last_dir == 'B' {
+        'F'
+    } else if input.fs[state.t] == 2 {
+        'R'
+    } else {
+        'L'
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -59,23 +120,18 @@ fn parse_input(f: &mut LineSource<BufReader<Stdin>>) -> Input {
 
 #[derive(Clone, Debug)]
 struct State {
-    // ps: Vec<usize>, // t回目でキャンディがどこに来るか
     board: Vec<Vec<usize>>,
-    t: usize,             // ターン数
-    last: (usize, usize), // 最後に置かれた場所
+    t: usize,       // ターン数
+    last_dir: char, // 最後に置かれた方向
 }
 
 impl State {
     fn new() -> Self {
         let board = vec![vec![0; N]; N]; // 0だったら空きマス
-        let last = (!0, !0);
-        // let last = ((input.ps[0] - 1) / N, (input.ps[0] - 1) % N);
-        // board[last.0][last.1] = input.fs[0];
         Self {
-            // ps: input.ps.clone(),
             board,
             t: 0,
-            last,
+            last_dir: '.',
         }
     }
     fn place_candy(&mut self, input: &Input, pos: usize) {
@@ -87,7 +143,7 @@ impl State {
                     p += 1;
                     if p == pos {
                         self.board[i][j] = input.fs[self.t];
-                        self.last = (i, j);
+                        // self.last = (i, j);
                         break 'place;
                     }
                 }
@@ -158,30 +214,11 @@ impl State {
                 panic!("Illegal output: {}", dir)
             }
         }
-        // self.t += 1;
-        // let mut p = 0;
-        // for i in 0..N {
-        //     for j in 0..N {
-        //         if self.board[i][j] == 0 {
-        //             p += 1;
-        // /tools/libs.rsではここで置く処理をしていた
-        // if p == self.ps[self.t] {
-        //     self.board[i][j] = input.fs[self.t];
-        //     self.last = (i, j);
-        // }
-        //     }
-        // }
-        // }
+        self.last_dir = dir;
     }
 }
 
 fn compute_score(input: &Input, state: &State) -> i64 {
-    // let mut state = State::new();
-    // for t in 0..out.len().min(N * N - 1) {
-    //     if let Err(err) = state.apply_move(out[t]) {
-    //         return (0, format!("{} (turn: {})", err, t), state);
-    //     }
-    // }
     let mut visited = vec![vec![false; N]; N];
     let mut num = 0;
     for i in 0..N {
@@ -213,25 +250,25 @@ fn compute_score(input: &Input, state: &State) -> i64 {
     (1e6 * num as f64 / d[1..].iter().map(|d| d * d).sum::<i32>() as f64).round() as i64
 }
 
-// fn get_time() -> f64 {
-//     let t = std::time::SystemTime::now()
-//         .duration_since(std::time::UNIX_EPOCH)
-//         .unwrap();
-//     t.as_secs() as f64 + t.subsec_nanos() as f64 * 1e-9
-// }
+fn get_time() -> f64 {
+    let t = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap();
+    t.as_secs() as f64 + t.subsec_nanos() as f64 * 1e-9
+}
 
-// struct Timer {
-//     start_time: f64,
-// }
+struct Timer {
+    start_time: f64,
+}
 
-// impl Timer {
-//     fn new() -> Timer {
-//         Timer {
-//             start_time: get_time(),
-//         }
-//     }
+impl Timer {
+    fn new() -> Timer {
+        Timer {
+            start_time: get_time(),
+        }
+    }
 
-//     fn get_time(&self) -> f64 {
-//         get_time() - self.start_time
-//     }
-// }
+    fn get_time(&self) -> f64 {
+        get_time() - self.start_time
+    }
+}
