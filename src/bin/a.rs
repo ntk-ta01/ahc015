@@ -1,14 +1,10 @@
 use proconio::{input, source::line::LineSource};
-use rand::prelude::*;
-use std::{
-    collections::VecDeque,
-    io::{self, BufReader, Stdin},
-};
+use std::io::{self, BufReader, Stdin};
 
 // const TIMELIMIT: f64 = 1.95;
 
 const DIJ: [(usize, usize); 4] = [(1, 0), (0, 1), (!0, 0), (0, !0)];
-const DIR: [char; 4] = ['B', 'R', 'F', 'L'];
+const DIR: [char; 4] = ['B', 'R', 'F', 'L']; // 下、右、上、左
 
 const N: usize = 10;
 const M: usize = 3;
@@ -19,68 +15,33 @@ fn main() {
     let mut source = LineSource::new(BufReader::new(io::stdin()));
     let input = parse_input(&mut source);
     let mut output: Output = vec![];
-    let mut rng = rand_chacha::ChaCha20Rng::seed_from_u64(159640460);
+    // let mut rng = rand_chacha::ChaCha20Rng::seed_from_u64(159640460);
     let mut state = State::new();
-    for _ in 0..N * N {
+    for _ in 0..N * N - 1 {
         input! {
             from &mut source,
             pos: usize,
         }
         state.place_candy(&input, pos);
-
-        const TURN: usize = 3; // 先読みするターン
-        const POS: usize = 4; // 新しく生成するposの数
-        const BEAM: usize = 50; // 上位k個のスコアのやつだけ覚える
-        let mut beam_scores = vec![vec![0; BEAM]; TURN + 2];
-        let mut max_dirs = vec![];
-        let mut max_score = 0;
-        let mut states = vec![VecDeque::new(); TURN + 2];
-        let new_state = state.clone();
-        states[0].push_back((new_state, 0, vec![]));
-        while states.iter().any(|v| !v.is_empty()) {
-            let mut t = 0;
-            for (i, v) in states.iter().enumerate() {
-                if !v.is_empty() {
-                    t = i;
-                    break;
-                }
-            }
-            let state = states[t].pop_front().unwrap();
-            for &dir in DIR.iter() {
-                let (mut new_state, turn, mut dirs) = state.clone();
-                new_state.apply_move(dir);
-                dirs.push(dir);
-                let new_score = compute_score(&input, &new_state);
-                let mut insert_i = BEAM;
-                for (i, &score) in beam_scores[t].iter().enumerate() {
-                    if score < new_score {
-                        insert_i = i;
-                        break;
-                    }
-                }
-                if insert_i == BEAM {
-                    continue;
-                }
-                beam_scores[t].insert(insert_i, new_score);
-                beam_scores[t].pop();
-                if 1 < 101 - new_state.t && turn < TURN {
-                    for _ in 0..POS {
-                        let mut new_state = new_state.clone();
-                        let pos = rng.gen_range(1, 101 - new_state.t);
-                        new_state.place_candy(&input, pos);
-                        states[turn + 1].push_back((new_state, turn + 1, dirs.clone()));
-                    }
-                } else if max_score < new_score {
-                    max_score = new_score;
-                    max_dirs = dirs;
-                }
-            }
-        }
-        state.apply_move(max_dirs[0]);
-        output.push(max_dirs[0]);
-        println!("{}", max_dirs[0]);
+        // 次に来るやつを見て決める（一番最初に来た奴は見ない）
+        let dir = if input.fs[state.t] == 1 {
+            println!("B");
+            'B'
+        } else if state.t > 1 && output[state.t - 2] == 'B' {
+            println!("F");
+            'F'
+        } else if input.fs[state.t] == 2 {
+            println!("R");
+            'R'
+        } else {
+            println!("L");
+            'L'
+        };
+        state.apply_move(dir);
+        output.push(dir);
     }
-    eprintln!("{}", compute_score(&input, &state));
+    // eprintln!("{}", output.len());
+    // eprintln!("{}", compute_score(&input, &state));
 }
 
 #[derive(Clone, Debug)]
