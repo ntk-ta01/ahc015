@@ -29,6 +29,7 @@ fn main() {
         state.place_candy(&input, pos);
 
         const TURN: usize = 3; // 先読みするターン
+        const POS: usize = 3; // 新しく生成するposの数
         let mut max_dirs = vec![];
         let mut max_score = 0;
         let mut states = VecDeque::new();
@@ -41,9 +42,12 @@ fn main() {
                 new_state.apply_move(dir);
                 dirs.push(dir);
                 if 1 < 101 - new_state.t && turn < TURN {
-                    let pos = rng.gen_range(1, 101 - new_state.t);
-                    new_state.place_candy(&input, pos);
-                    states.push_back((new_state, turn + 1, dirs));
+                    for _ in 0..POS {
+                        let mut new_state = new_state.clone();
+                        let pos = rng.gen_range(1, 101 - new_state.t);
+                        new_state.place_candy(&input, pos);
+                        states.push_back((new_state, turn + 1, dirs.clone()));
+                    }
                 } else {
                     let new_score = compute_score(&input, &new_state);
                     if max_score < new_score {
