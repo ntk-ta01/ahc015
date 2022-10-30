@@ -29,32 +29,50 @@ fn main() {
         state.place_candy(&input, pos);
 
         const TURN: usize = 3; // 先読みするターン
-        const POS: usize = 3; // 新しく生成するposの数
-
+        const POS: usize = 4; // 新しく生成するposの数
+        const BEAM: usize = 50; // 上位k個のスコアのやつだけ覚える
+        let mut beam_scores = vec![vec![0; BEAM]; TURN + 2];
         let mut max_dirs = vec![];
         let mut max_score = 0;
-        let mut states = VecDeque::new();
+        let mut states = vec![VecDeque::new(); TURN + 2];
         let new_state = state.clone();
-        states.push_back((new_state, 0, vec![]));
-        while !states.is_empty() {
-            let state = states.pop_front().unwrap();
+        states[0].push_back((new_state, 0, vec![]));
+        while states.iter().any(|v| !v.is_empty()) {
+            let mut t = 0;
+            for (i, v) in states.iter().enumerate() {
+                if !v.is_empty() {
+                    t = i;
+                    break;
+                }
+            }
+            let state = states[t].pop_front().unwrap();
             for &dir in DIR.iter() {
                 let (mut new_state, turn, mut dirs) = state.clone();
                 new_state.apply_move(dir);
                 dirs.push(dir);
+                let new_score = compute_score(&input, &new_state);
+                let mut insert_i = BEAM;
+                for (i, &score) in beam_scores[t].iter().enumerate() {
+                    if score < new_score {
+                        insert_i = i;
+                        break;
+                    }
+                }
+                if insert_i == BEAM {
+                    continue;
+                }
+                beam_scores[t].insert(insert_i, new_score);
+                beam_scores[t].pop();
                 if 1 < 101 - new_state.t && turn < TURN {
                     for _ in 0..POS {
                         let mut new_state = new_state.clone();
                         let pos = rng.gen_range(1, 101 - new_state.t);
                         new_state.place_candy(&input, pos);
-                        states.push_back((new_state, turn + 1, dirs.clone()));
+                        states[turn + 1].push_back((new_state, turn + 1, dirs.clone()));
                     }
-                } else {
-                    let new_score = compute_score(&input, &new_state);
-                    if max_score < new_score {
-                        max_score = new_score;
-                        max_dirs = dirs;
-                    }
+                } else if max_score < new_score {
+                    max_score = new_score;
+                    max_dirs = dirs;
                 }
             }
         }
